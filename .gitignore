@@ -1,0 +1,43 @@
+# ============================================================
+#  SECRETS & CREDENTIALS — never commit these
+# ============================================================
+.env
+.env.*
+*.pem
+*.key
+*.p12
+credentials
+aws-credentials*
+secrets.*
+*_secret*
+
+# ============================================================
+#  Terraform
+# ============================================================
+.terraform/
+*.tfstate           # state can contain secrets in plaintext
+*.tfstate.*
+*.tfvars            # may hold secrets — commit *.tfvars.example instead
+!*.tfvars.example
+crash.log
+crash.*.log
+override.tf
+override.tf.json
+# NOTE: .terraform.lock.hcl SHOULD be committed (pins provider versions) — not ignored.
+
+# ============================================================
+#  CloudFormation / SAM
+# ============================================================
+packaged-*.yaml     # output of `aws cloudformation package`
+.aws-sam/
+samconfig.toml
+
+# ============================================================
+#  OS & editor noise
+# ============================================================
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+*.swp
+*~

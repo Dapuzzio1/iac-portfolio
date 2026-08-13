@@ -1,0 +1,137 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: Project 2 - Highly available web tier (ALB + EC2 Auto Scaling).
+
+Parameters:
+  EnvironmentName:
+    Type: String
+    Default: dev
+    Description: Prefix for names/tags; also used to import Project 1 exports.
+
+  InstanceType:
+    Type: String
+    Default: t3.micro
+    Description: EC2 instance size (free-tier eligible).
+
+  LatestAmiId:
+    Type: 'AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>'
+    Default: '/aws/service/ami-amazon-linux-latest/al2023-ami-kernel-default-x86_64'
+    Description: Latest Amazon Linux 2023 AMI, resolved automatically via SSM.
+
+Resources:
+  ALBSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Allow HTTP from the internet to the load balancer
+      VpcId: !ImportValue
+        'Fn::Sub': '${EnvironmentName}-vpc-id'
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          CidrIp: 0.0.0.0/0
+      Tags:
+        - Key: Name
+          Value: !Sub '${EnvironmentName}-alb-sg'
+
+  InstanceSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Allow HTTP from the ALB only
+      VpcId: !ImportValue
+        'Fn::Sub': '${EnvironmentName}-vpc-id'
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          SourceSecurityGroupId: !Ref ALBSecurityGroup
+      Tags:
+        - Key: Name
+          Value: !Sub '${EnvironmentName}-instance-sg'
+
+  ApplicationLoadBalancer:
+    Type: AWS::ElasticLoadBalancingV2::LoadBalancer
+    Properties:
+      Name: !Sub '${EnvironmentName}-alb'
+      Scheme: internet-facing
+      Type: application
+      SecurityGroups:
+        - !Ref ALBSecurityGroup
+      Subnets: !Split
+        - ','
+        - !ImportValue
+            'Fn::Sub': '${EnvironmentName}-public-subnets'
+      Tags:
+        - Key: Name
+          Value: !Sub '${EnvironmentName}-alb'
+
+  TargetGroup:
+    Type: AWS::ElasticLoadBalancingV2::TargetGroup
+    Properties:
+      Name: !Sub '${EnvironmentName}-tg'
+      VpcId: !ImportValue
+        'Fn::Sub': '${EnvironmentName}-vpc-id'
+      Port: 80
+      Protocol: HTTP
+      TargetType: instance
+      HealthCheckPath: /
+      HealthCheckProtocol: HTTP
+      Tags:
+        - Key: Name
+          Value: !Sub '${EnvironmentName}-tg'
+
+  HTTPListener:
+    Type: AWS::ElasticLoadBalancingV2::Listener
+    Properties:
+      LoadBalancerArn: !Ref ApplicationLoadBalancer
+      Port: 80
+      Protocol: HTTP
+      DefaultActions:
+        - Type: forward
+          TargetGroupArn: !Ref TargetGroup
+
+  WebServerLaunchTemplate:
+    Type: AWS::EC2::LaunchTemplate
+    Properties:
+      LaunchTemplateName: !Sub '${EnvironmentName}-web-lt'
+      LaunchTemplateData:
+        ImageId: !Ref LatestAmiId
+        InstanceType: !Ref InstanceType
+        SecurityGroupIds:
+          - !Ref InstanceSecurityGroup
+        UserData:
+          Fn::Base64: |
+            #!/bin/bash
+            dnf install -y httpd
+            systemctl enable --now httpd
+            echo "<h1>Hello from $(hostname -f)</h1><p>Served by Daniel's highly-available web tier.</p>" > /var/www/html/index.html
+        TagSpecifications:
+          - ResourceType: instance
+            Tags:
+              - Key: Name
+                Value: !Sub '${EnvironmentName}-web'
+
+  WebServerASG:
+    Type: AWS::AutoScaling::AutoScalingGroup
+    Properties:
+      AutoScalingGroupName: !Sub '${EnvironmentName}-web-asg'
+      MinSize: '2'
+      MaxSize: '4'
+      DesiredCapacity: '2'
+      VPCZoneIdentifier: !Split
+        - ','
+        - !ImportValue
+            'Fn::Sub': '${EnvironmentName}-public-subnets'
+      TargetGroupARNs:
+        - !Ref TargetGroup
+      LaunchTemplate:
+        LaunchTemplateId: !Ref WebServerLaunchTemplate
+        Version: !GetAtt WebServerLaunchTemplate.LatestVersionNumber
+      Tags:
+        - Key: Name
+          Value: !Sub '${EnvironmentName}-web'
+          PropagateAtLaunch: true
+
+Outputs:
+  LoadBalancerURL:
+    Description: Public URL of the load balancer
+    Value: !Sub 'http://${ApplicationLoadBalancer.DNSName}'

@@ -1,6 +1,6 @@
-# Terraform — Reusable VPC Module + Remote State
+# Terraform — Reusable VPC Module + Remote State (with locking)
 
-The VPC foundation refactored into a reusable **module**, called twice to stand up two independent environments (**dev** + **prod**) from one tested building block. State is stored **remotely in a versioned S3 bucket**.
+The VPC foundation refactored into a reusable **module**, called twice to stand up two independent environments (**dev** + **prod**) from one tested building block. State is stored **remotely in a versioned S3 bucket, with state locking enabled** so concurrent runs can't corrupt it.
 
 ## Architecture
 
@@ -10,7 +10,7 @@ The VPC foundation refactored into a reusable **module**, called twice to stand 
 
 ```
 02-vpc-module/
-├── main.tf          # root: S3 backend + two module calls (dev, prod)
+├── main.tf          # root: S3 backend (with locking) + two module calls (dev, prod)
 ├── variables.tf     # root inputs
 ├── outputs.tf       # re-exposes module outputs
 └── modules/
@@ -25,11 +25,12 @@ The VPC foundation refactored into a reusable **module**, called twice to stand 
 - **Modules** — a reusable VPC package: `source`, inputs/outputs, `module.<name>.<output>`
 - **Multi-environment** — one module, two calls (`dev` = `10.0.0.0/16`, `prod` = `10.1.0.0/16`)
 - **Remote state** — a `backend "s3"` block storing state in a **versioned S3 bucket** (safe, shareable, team-ready)
+- **State locking** — `use_lockfile = true` (S3-native lock): if two people run `apply` at once, the second waits, so the state file can't be corrupted
 
 ## Usage
 
 ```bash
-terraform init      # registers the module + configures the S3 backend
+terraform init      # registers the module + configures the S3 backend + lock
 terraform plan
 terraform apply     # builds both dev and prod VPCs
 terraform destroy   # when done
@@ -37,5 +38,5 @@ terraform destroy   # when done
 
 ## Notes
 
-- Backend bucket: `dapuzzio-iac-tfstate` (versioning enabled), key `vpc-module/terraform.tfstate`.
+- Backend bucket: `dapuzzio-iac-tfstate` (versioning + locking enabled), key `vpc-module/terraform.tfstate`.
 - State is **never** committed to git (`*.tfstate` is gitignored) — it lives only in S3.

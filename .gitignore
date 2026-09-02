@@ -1,43 +1,36 @@
-# ============================================================
-#  SECRETS & CREDENTIALS — never commit these
-# ============================================================
-.env
-.env.*
-*.pem
-*.key
-*.p12
-credentials
-aws-credentials*
-secrets.*
-*_secret*
-
-# ============================================================
-#  Terraform
-# ============================================================
+# Terraform
 .terraform/
-*.tfstate           # state can contain secrets in plaintext
+.terraform.lock.hcl.backup
+*.tfstate
 *.tfstate.*
-*.tfvars            # may hold secrets — commit *.tfvars.example instead
-!*.tfvars.example
 crash.log
 crash.*.log
 override.tf
 override.tf.json
-# NOTE: .terraform.lock.hcl SHOULD be committed (pins provider versions) — not ignored.
+*_override.tf
+*_override.tf.json
+.terraformrc
+terraform.rc
 
-# ============================================================
-#  CloudFormation / SAM
-# ============================================================
-packaged-*.yaml     # output of `aws cloudformation package`
+# .tfvars: the ones in this repo hold ONLY non-secret values (CIDRs, env names)
+# and are committed on purpose to demonstrate multi-environment config.
+# In a project where tfvars hold secrets, ignore them instead:
+# *.tfvars
+
+# Secrets / credentials
+*.pem
+*.key
+.env
+.env.*
+credentials
+aws-credentials*
+
+# CloudFormation
+packaged-*.yaml
 .aws-sam/
-samconfig.toml
 
-# ============================================================
-#  OS & editor noise
-# ============================================================
+# OS / editor
 .DS_Store
-Thumbs.db
 .vscode/
 .idea/
 *.swp
-*~

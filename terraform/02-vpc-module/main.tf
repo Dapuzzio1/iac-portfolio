@@ -1,8 +1,9 @@
 terraform {
   backend "s3" {
-    bucket = "dapuzzio-iac-tfstate"
-    key    = "vpc-module/terraform.tfstate"
-    region = "us-east-2"
+    bucket       = "dapuzzio-iac-tfstate"
+    key          = "vpc-module/terraform.tfstate"
+    region       = "us-east-2"
+    use_lockfile = true
   }
 
   required_providers {
@@ -12,7 +13,7 @@ terraform {
     }
   }
 }
- 
+
 provider "aws" {
   region = var.aws_region
 }
